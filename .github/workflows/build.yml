@@ -1,0 +1,50 @@
+name: Build Lumen
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lumen-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Samsung TV package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Prepare output directory
+        run: mkdir -p dist
+
+      - name: Build WGT
+        run: |
+          docker run --rm \
+            --platform linux/amd64 \
+            --mount type=bind,source="$GITHUB_WORKSPACE/src",target=/app,readonly \
+            --mount type=bind,source="$GITHUB_WORKSPACE/dist",target=/out \
+            --mount type=volume,source=lumen-tizen-home,target=/home/developer \
+            vitalets/tizen-webos-sdk:3.0 \
+            bash -lc '
+              set -e
+              rm -rf /tmp/app
+              cp -a /app /tmp/app
+              tizen package -t wgt -o /out -- /tmp/app
+              test -s /out/Lumen.wgt
+              ls -lh /out/Lumen.wgt
+            '
+
+      - name: Upload WGT
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lumen-WGT
+          path: dist/Lumen.wgt
+          if-no-files-found: error
+          retention-days: 14
